@@ -29,6 +29,11 @@
 cmake_minimum_required(VERSION 3.19 FATAL_ERROR)
 cmake_policy(SET CMP0112 NEW)
 
+#find_package(CUDA QUIET REQUIRED)
+#find_package(CUDAToolkit REQUIRED)
+#set(CUDA_TOOLKIT_ROOT_DIR "/mnt/geogpt-gpfs/zhijiang/home/axl/miniconda3/")
+#set(CMAKE_CUDA_COMPILER "/mnt/geogpt-gpfs/zhijiang/home/axl/miniconda3/bin/nvcc")
+
 if(cutlass_LOADED)
   # If CUTLASS has been previously fetched and loaded, don't do it again.
   return()

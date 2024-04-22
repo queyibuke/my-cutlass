@@ -27,9 +27,12 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-cutlass_example_add_executable(
+cmake_minimum_required(VERSION 3.26)
+#project(00_basic_gemm_demo)
+#cutlass_example_add_executable(
+add_executable(
   00_basic_gemm
-  basic_gemm.cu
+  test.cu
+  #basic_gemm.cu
 )
   
