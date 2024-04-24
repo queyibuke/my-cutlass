@@ -110,7 +110,7 @@ int run(cutlass::HostTensor<ElementInputA, LayoutInputA>& tensor_a,
   // Wait for kernels to finish
   cudaDeviceSynchronize();
 
-  // Copy output data from CUTLASS and reference kernel to host for comparison
+  // Copy output data from CUTLASS to host for comparison
   tensor_d.sync_host();
   if(status !=cutlass::Status::kSuccess) {
     return -1;
