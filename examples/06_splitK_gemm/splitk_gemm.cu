@@ -147,7 +147,7 @@ int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g,
   // Initialize CUTLASS kernel with arguments and workspace pointer
   cutlass::Status status = gemm_op1.initialize(arguments, workspace1.get());
   CUTLASS_CHECK(status);
-  status = gemm_op2.initialize(arguments, workspace2.get());
+  status = gemm_op2.initialize(arguments2, workspace2.get());
   CUTLASS_CHECK(status);
 
   // Launch initialized CUTLASS kernel
@@ -216,7 +216,6 @@ int main() {
   // Split K dimension into 16 partitions
   int split_k_slices = 16;
 
-  std::cout << "1" << std::endl; 
   cutlass::reference::host::TensorFill(tensor_g.host_view(), ElementInputG(1));
   cutlass::reference::host::TensorFill(tensor_w1.host_view(), ElementInputW1(2));
   cutlass::reference::host::TensorFill(tensor_x.host_view(), ElementInputX(3));
@@ -224,30 +223,35 @@ int main() {
   cutlass::reference::host::TensorFill(tensor_d.host_view(), ElementOutput2(0));
   cutlass::reference::host::TensorFill(tensor_o1.host_view(), ElementOutput1(0));
   cutlass::reference::host::TensorFill(tensor_o2.host_view(), ElementOutput2(0));
-  std::cout << "2" << std::endl;
 
   int result = run(tensor_g, tensor_w1, tensor_x, tensor_c, tensor_d, tensor_o1, tensor_o2, alpha1, beta1, alpha2, beta2, problem_size, split_k_slices);
-  std::cout << "3" << std::endl;
   
   std::cout << "tensor_o1: " << std::endl;
-  for(unsigned int i = 0; i < tensor_o1.size(); i++) {
-	  if((i + 1) / 8192 == 0) {
+  std::cout << "the first number is " << tensor_o1.host_data(0) << std::endl;
+  std::cout << "the second number is  " << tensor_o1.host_data(1) <<std::endl;
+  std::cout << "the lastd number is  " << tensor_o1.host_data(33554431) <<std::endl;
+  //for(unsigned int i = 0; i < tensor_o1.size(); i++) {
+	  //if((i + 1) / 8192 == 0) {
 	  //	std::cout << "\nthe " << i / 8192 << "line is :" << std::endl;
-       	        std::cout << tensor_o1.host_data(i) << " ";
-	  }
-	  std::cout << std::endl;
-	  if((i + 1) / 8192 == 4095) {
-	  	std::cout << tensor_o1.host_data(i) << " ";
-	  }
-  }
+       	  //      std::cout << tensor_o1.host_data(i) << " ";
+	  //}
+	  //if((i + 1) / 8192 == 4095) {
+	  //	std::cout << tensor_o1.host_data(i) << " ";
+	  //}
+  //}
   std::cout << "\ntensor_o2: " << std::endl;
-  for(unsigned int i = 0; i < tensor_o1.size(); i++) {
-    if((i + 1) / 8192 == 0) {
+  //for(unsigned int i = 0; i < tensor_o1.size(); i++) {
+  // if((i + 1) / 8192 == 0) {
       //std::cout << "\nthe " << i / 8192 << "line is :" << std::endl; 
-      std::cout << tensor_o2.host_data(i) << " ";
-    }
-  }
-  std::cout << std::endl;
+  //    std::cout << tensor_o2.host_data(i) << " ";
+  //  }
+  //}
+  //std::cout << std::endl;
+
+  std::cout << "the first number is " << tensor_o2.host_data(0) << std::endl;
+  std::cout << "the second number is  " << tensor_o2.host_data(1) <<std::endl;
+  std::cout << "the lastd number is  " << tensor_o2.host_data(33554431) <<std::endl;
+
 
   //std::ofstream outfile("out.txt");
   //if(!outfile.is_open()) {
