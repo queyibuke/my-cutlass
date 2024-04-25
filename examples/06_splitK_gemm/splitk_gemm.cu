@@ -117,7 +117,7 @@ int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g,
 
   // Create a tuple of gemm kernel arguments. This is later passed as arguments to launch
   // instantiated CUTLASS kernel
-  typename Gemm::Arguments arguments1{problem_size,  // <- problem size of matrix multiplication
+  typename GemmO1::Arguments arguments{problem_size,  // <- problem size of matrix multiplication
                                      tensor_g.device_ref(),  // <- reference to matrix G on device
                                      tensor_x.device_ref(),  // <- reference to matrix X on device
                                      tensor_c.device_ref(),  // <- reference to matrix C on device
@@ -125,7 +125,7 @@ int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g,
                                      {alpha1, beta1},          // <- tuple of alpha and beta
                                      split_k_slices};        // <- k-dimension split factor
   
-  typename Gemm::Arguments arguments2{problem_size,  // <- problem size of matrix multiplication
+  typename GemmO2::Arguments arguments2{problem_size,  // <- problem size of matrix multiplication
                                      tensor_w1.device_ref(),  // <- reference to matrix W1 on device
                                      tensor_x.device_ref(),  // <- reference to matrix X on device
                                      tensor_d.device_ref(),  // <- reference to matrix D on device
@@ -134,24 +134,24 @@ int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g,
                                      split_k_slices};        // <- k-dimension split factor
 
   // Using the arguments, query for extra workspace required for matrix multiplication computation
-  size_t workspace_size1 = Gemm::get_workspace_size(arguments);
+  size_t workspace_size1 = GemmO1::get_workspace_size(arguments);
   size_t workspace_size2 = GemmO2::get_workspace_size(arguments2);
   // Allocate workspace memory
   cutlass::device_memory::allocation<uint8_t> workspace1(workspace_size1);
   cutlass::device_memory::allocation<uint8_t> workspace2(workspace_size2);
 
   // Instantiate CUTLASS kernel depending on templates
-  Gemm gemm_op1;
+  GemmO1 gemm_op1;
   GemmO2 gemm_op2;
 
   // Initialize CUTLASS kernel with arguments and workspace pointer
-  cutlass::Status status = gemm_op.initialize(arguments, workspace1.get());
+  cutlass::Status status = gemm_op1.initialize(arguments, workspace1.get());
   CUTLASS_CHECK(status);
   status = gemm_op2.initialize(arguments, workspace2.get());
   CUTLASS_CHECK(status);
 
   // Launch initialized CUTLASS kernel
-  status = gemm_op();
+  status = gemm_op1();
   CUTLASS_CHECK(status);
   status = gemm_op2();
   CUTLASS_CHECK(status);
@@ -228,20 +228,27 @@ int main() {
 
   int result = run(tensor_g, tensor_w1, tensor_x, tensor_c, tensor_d, tensor_o1, tensor_o2, alpha1, beta1, alpha2, beta2, problem_size, split_k_slices);
   std::cout << "3" << std::endl;
-
+  
+  std::cout << "tensor_o1: " << std::endl;
   for(unsigned int i = 0; i < tensor_o1.size(); i++) {
-	  if(i + 1 % 8192 == 0) {
-	  	std::cout << "\nthe " << i / 8192 << "line is :" << std::endl;
+	  if((i + 1) / 8192 == 0) {
+	  //	std::cout << "\nthe " << i / 8192 << "line is :" << std::endl;
+       	        std::cout << tensor_o1.host_data(i) << " ";
 	  }
-	  std::cout <<tensor_o1.host_data(i) << " ";
+	  std::cout << std::endl;
+	  if((i + 1) / 8192 == 4095) {
+	  	std::cout << tensor_o1.host_data(i) << " ";
+	  }
   }
-
+  std::cout << "\ntensor_o2: " << std::endl;
   for(unsigned int i = 0; i < tensor_o1.size(); i++) {
-    if(i +1 % 8192 == 0) {
-      std::cout << "\nthe " << i / 8192 << "line is :" << std::endl;
+    if((i + 1) / 8192 == 0) {
+      //std::cout << "\nthe " << i / 8192 << "line is :" << std::endl; 
+      std::cout << tensor_o2.host_data(i) << " ";
     }
-    std::cout <<tensor_o1.host_data(i) << " ";
   }
+  std::cout << std::endl;
+
   //std::ofstream outfile("out.txt");
   //if(!outfile.is_open()) {
   //  std::cerr << "not open file!" << std::endl;
