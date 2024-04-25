@@ -91,6 +91,16 @@ using GemmO2 = cutlass::gemm::device::GemmSplitKParallel<ElementInputW1,
                                                        ShapeMMAWarp,
                                                        ShapeMMAOp,
                                                        EpilogueOp>;
+__global__ void dot_product_kernel(cutlass::HostTensor<ElementOutput1, LayoutOutput1>& tensor_o1,
+                                   cutlass::HostTensor<ElementOutput2, LayoutOutput2>& tensor_o2,
+                                   cutlass::HostTensor<ElementOutput2, LayoutOutput2>& tensor_dot_result)
+  {
+      int idx = blockIdx.x * blockDim.x + threadIdx.x;
+      if(tid < problem_size.m() * problem_size.n()) {
+        tensor_dot_result.at(idx) = tensor_o1.at(idx) * tensor_o2.at(idx);
+      }
+      __syncthreads();
+  }
 
 int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g, 
         cutlass::HostTensor<ElementInputW1, LayoutInputW1>& tensor_w1,
@@ -104,7 +114,8 @@ int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g,
         ElementComputeEpilogue alpha2,
         ElementComputeEpilogue beta2,        
         cutlass::gemm::GemmCoord& problem_size,
-        int split_k_slices) {
+        int split_k_slices
+        cutlass::HostTensor<ElementOutput2, LayoutOutput2>& tensor_dot_result) {
 
   // Copy data from host to GPU
   tensor_g.sync_device();
@@ -114,6 +125,7 @@ int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g,
   tensor_d.sync_device();
   tensor_o1.sync_device();
   tensor_o2.sync_device();
+  tensor_dot_result.sync_device();
 
   // Create a tuple of gemm kernel arguments. This is later passed as arguments to launch
   // instantiated CUTLASS kernel
@@ -159,9 +171,18 @@ int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g,
   // Wait for kernels to finish
   cudaDeviceSynchronize();
 
-  // Copy output data from CUTLASS to host for comparison
-  tensor_o1.sync_host();
-  tensor_o2.sync_host();
+  if(1) {
+    // Copy output data from CUTLASS to host for comparison
+    tensor_o1.sync_host();
+    tensor_o2.sync_host();    
+  } else {
+    dim3 blockSize = (128,1,1);
+    dim3 gridSize = ((problem_size.m() * problem_size.n() + blockSize.x - 1) / blockSize.x,1,1);
+    dot_product_kernel<<<gridSize, blockSize>>>(tensor_o1.device_data(), tensor_o2.device_data(), tensor_dot_result.device_data());
+    cudaDeviceSynchronize();
+    tensor_dot_result.sync_host();
+  }
+
   if(status !=cutlass::Status::kSuccess) {
     return -1;
   } else {
@@ -199,13 +220,14 @@ int main() {
   cutlass::gemm::GemmCoord problem_size(length_m, length_n, length_k);
 
   // Initialize tensors using CUTLASS helper functions
-  cutlass::HostTensor<ElementInputG, LayoutInputG> tensor_g(problem_size.mk());  // <- Create matrix A with dimensions M x K
-  cutlass::HostTensor<ElementInputW1, LayoutInputW1> tensor_w1(problem_size.mk());  // <- Create matrix B with dimensions M x K
-  cutlass::HostTensor<ElementInputX, LayoutInputX> tensor_x(problem_size.kn());  // <- Create matrix B with dimensions K x N
+  cutlass::HostTensor<ElementInputG, LayoutInputG> tensor_g(problem_size.mk());  // <- Create matrix G with dimensions M x K
+  cutlass::HostTensor<ElementInputW1, LayoutInputW1> tensor_w1(problem_size.mk());  // <- Create matrix W1 with dimensions M x K
+  cutlass::HostTensor<ElementInputX, LayoutInputX> tensor_x(problem_size.kn());  // <- Create matrix X with dimensions K x N
   cutlass::HostTensor<ElementOutput1, LayoutOutput1> tensor_c(problem_size.mn());  // <- Create matrix C with dimensions M x N
   cutlass::HostTensor<ElementOutput2, LayoutOutput2> tensor_d(problem_size.mn());  // <- Create matrix D with dimensions M x N 
-  cutlass::HostTensor<ElementOutput1, LayoutOutput1> tensor_o1(problem_size.mn());  // <- Create matrix D with dimensions M x N
-  cutlass::HostTensor<ElementOutput2, LayoutOutput2> tensor_o2(problem_size.mn());  // <- Create matrix D with dimensions M x N
+  cutlass::HostTensor<ElementOutput1, LayoutOutput1> tensor_o1(problem_size.mn());  // <- Create matrix O1 with dimensions M x N
+  cutlass::HostTensor<ElementOutput2, LayoutOutput2> tensor_o2(problem_size.mn());  // <- Create matrix O2 with dimensions M x N
+  cutlass::HostTensor<ElementOutput2, LayoutOutput2> tensor_dot_result(problem_size.mn());  // <- Create matrix dot_result with dimensions M x N
                                                                                  // used to store output from CUTLASS kernel
   // Initialize alpha and beta for dot product computation
   ElementComputeEpilogue alpha1 = ElementComputeEpilogue(1);//需要激活函数赋值
@@ -223,35 +245,40 @@ int main() {
   cutlass::reference::host::TensorFill(tensor_d.host_view(), ElementOutput2(0));
   cutlass::reference::host::TensorFill(tensor_o1.host_view(), ElementOutput1(0));
   cutlass::reference::host::TensorFill(tensor_o2.host_view(), ElementOutput2(0));
+  cutlass::reference::host::TensorFill(tensor_dot_result.host_view(), ElementOutput2(0));
 
-  int result = run(tensor_g, tensor_w1, tensor_x, tensor_c, tensor_d, tensor_o1, tensor_o2, alpha1, beta1, alpha2, beta2, problem_size, split_k_slices);
-  
-  std::cout << "tensor_o1: " << std::endl;
-  std::cout << "the first number is " << tensor_o1.host_data(0) << std::endl;
-  std::cout << "the second number is  " << tensor_o1.host_data(1) <<std::endl;
-  std::cout << "the lastd number is  " << tensor_o1.host_data(33554431) <<std::endl;
-  //for(unsigned int i = 0; i < tensor_o1.size(); i++) {
-	  //if((i + 1) / 8192 == 0) {
-	  //	std::cout << "\nthe " << i / 8192 << "line is :" << std::endl;
-       	  //      std::cout << tensor_o1.host_data(i) << " ";
-	  //}
-	  //if((i + 1) / 8192 == 4095) {
-	  //	std::cout << tensor_o1.host_data(i) << " ";
-	  //}
-  //}
-  std::cout << "\ntensor_o2: " << std::endl;
-  //for(unsigned int i = 0; i < tensor_o1.size(); i++) {
-  // if((i + 1) / 8192 == 0) {
-      //std::cout << "\nthe " << i / 8192 << "line is :" << std::endl; 
-  //    std::cout << tensor_o2.host_data(i) << " ";
-  //  }
-  //}
-  //std::cout << std::endl;
+  int result = run(tensor_g, tensor_w1, tensor_x, tensor_c, tensor_d, tensor_o1, tensor_o2, tensor_dot_result, alpha1, beta1, alpha2, beta2, problem_size, split_k_slices);
+  if (1) {//需要与前面同步，否则报错
+    std::cout << "tensor_o1: " << std::endl;
+    std::cout << "the first number is " << tensor_o1.host_data(0) << std::endl;
+    std::cout << "the second number is  " << tensor_o1.host_data(1) <<std::endl;
+    std::cout << "the lastd number is  " << tensor_o1.host_data(33554431) <<std::endl;
+    //for(unsigned int i = 0; i < tensor_o1.size(); i++) {
+      //if((i + 1) / 8192 == 0) {
+      //	std::cout << "\nthe " << i / 8192 << "line is :" << std::endl;
+            //      std::cout << tensor_o1.host_data(i) << " ";
+      //}
+      //if((i + 1) / 8192 == 4095) {
+      //	std::cout << tensor_o1.host_data(i) << " ";
+      //}
+    //}
+    std::cout << "\ntensor_o2: " << std::endl;
+    //for(unsigned int i = 0; i < tensor_o1.size(); i++) {
+    // if((i + 1) / 8192 == 0) {
+        //std::cout << "\nthe " << i / 8192 << "line is :" << std::endl; 
+    //    std::cout << tensor_o2.host_data(i) << " ";
+    //  }
+    //}
+    //std::cout << std::endl;
 
-  std::cout << "the first number is " << tensor_o2.host_data(0) << std::endl;
-  std::cout << "the second number is  " << tensor_o2.host_data(1) <<std::endl;
-  std::cout << "the lastd number is  " << tensor_o2.host_data(33554431) <<std::endl;
-
+    std::cout << "the first number is " << tensor_o2.host_data(0) << std::endl;
+    std::cout << "the second number is  " << tensor_o2.host_data(1) <<std::endl;
+    std::cout << "the lastd number is  " << tensor_o2.host_data(33554431) <<std::endl;    
+  } else {
+    std::cout << "the first number is " << tensor_dot_result.host_data(0) << std::endl;
+    std::cout << "the second number is  " << tensor_dot_result.host_data(1) <<std::endl;
+    std::cout << "the lastd number is  " << tensor_dot_result.host_data(33554431) <<std::endl;  
+  }
 
   //std::ofstream outfile("out.txt");
   //if(!outfile.is_open()) {
