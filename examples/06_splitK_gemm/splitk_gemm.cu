@@ -96,7 +96,7 @@ __global__ void dot_product_kernel(cutlass::HostTensor<ElementOutput1, LayoutOut
                                    cutlass::HostTensor<ElementOutput2, LayoutOutput2>& tensor_dot_result)
   {
       int idx = blockIdx.x * blockDim.x + threadIdx.x;
-      if(tid < problem_size.m() * problem_size.n()) {
+      if(idx < tensor_o1.size()) {
         tensor_dot_result.at(idx) = tensor_o1.at(idx) * tensor_o2.at(idx);
       }
       __syncthreads();
@@ -114,7 +114,7 @@ int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g,
         ElementComputeEpilogue alpha2,
         ElementComputeEpilogue beta2,        
         cutlass::gemm::GemmCoord& problem_size,
-        int split_k_slices
+        int split_k_slices,
         cutlass::HostTensor<ElementOutput2, LayoutOutput2>& tensor_dot_result) {
 
   // Copy data from host to GPU
@@ -171,7 +171,7 @@ int run(cutlass::HostTensor<ElementInputG, LayoutInputG>& tensor_g,
   // Wait for kernels to finish
   cudaDeviceSynchronize();
 
-  if(1) {
+  if(0) {
     // Copy output data from CUTLASS to host for comparison
     tensor_o1.sync_host();
     tensor_o2.sync_host();    
@@ -248,7 +248,7 @@ int main() {
   cutlass::reference::host::TensorFill(tensor_dot_result.host_view(), ElementOutput2(0));
 
   int result = run(tensor_g, tensor_w1, tensor_x, tensor_c, tensor_d, tensor_o1, tensor_o2, tensor_dot_result, alpha1, beta1, alpha2, beta2, problem_size, split_k_slices);
-  if (1) {//需要与前面同步，否则报错
+  if (0) {//需要与前面同步，否则报错
     std::cout << "tensor_o1: " << std::endl;
     std::cout << "the first number is " << tensor_o1.host_data(0) << std::endl;
     std::cout << "the second number is  " << tensor_o1.host_data(1) <<std::endl;

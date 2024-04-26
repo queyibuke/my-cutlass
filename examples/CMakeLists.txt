@@ -89,7 +89,7 @@ foreach(EXAMPLE
   #05_batched_gemm
   06_splitK_gemm
   #07_volta_tensorop_gemm
-  #08_turing_tensorop_gemm
+  08_turing_tensorop_gemm
   #09_turing_tensorop_conv2dfprop
   #10_planar_complex
   #11_planar_complex_array
